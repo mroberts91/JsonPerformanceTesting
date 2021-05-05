@@ -1,14 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IdentityModel.Tokens.Jwt;
-using System.Linq;
-using System.Security.Claims;
-using System.Threading.Tasks;
-using CleanArchitecture.Application;
+﻿using CleanArchitecture.Application;
 using CleanArchitecture.Application.Common.Interfaces;
 using CleanArchitecture.Infrastructure.Persistence;
-using CleanArchitecture.Infrastructure;
-using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -18,11 +10,16 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 using Server.Services;
+using System;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 
 namespace Server
 {
     public class Startup
     {
+        private static readonly SymmetricSecurityKey _securityKey = new(Guid.NewGuid().ToByteArray());
+
         public Startup(IConfiguration configuration, IHostEnvironment environment)
         {
             Configuration = configuration;
@@ -31,8 +28,7 @@ namespace Server
 
         public IConfiguration Configuration { get; }
         public IHostEnvironment Environment { get; }
-        // This method gets called by the runtime. Use this method to add services to the container.
-        // For more information on how to configure your application, visit https://go.microsoft.com/fwlink/?LinkID=398940
+
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddGrpc();
@@ -64,12 +60,11 @@ namespace Server
                             ValidateIssuer = false,
                             ValidateActor = false,
                             ValidateLifetime = true,
-                            IssuerSigningKey = SecurityKey
+                            IssuerSigningKey = _securityKey
                         };
                 });
         }
 
-        // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
             if (env.IsDevelopment())
@@ -89,7 +84,18 @@ namespace Server
 
                 endpoints.MapGet("/generateJwtToken", context =>
                 {
-                    return context.Response.WriteAsync(GenerateJwtToken(context.Request.Query["name"], context.Request.Query["email"]));
+                    string name = context.Request.Query["name"];
+                    string email = context.Request.Query["email"];
+                    JwtSecurityTokenHandler tokenHandler = new();
+
+                    if (string.IsNullOrEmpty(name))
+                        throw new InvalidOperationException("Name is not specified.");
+
+                    Claim[] claims = new Claim[2] { new(ClaimTypes.Name, name), new(ClaimTypes.Email, email) };
+                    SigningCredentials credentials = new(_securityKey, SecurityAlgorithms.HmacSha256);
+                    JwtSecurityToken token = new("ExampleServer", "ExampleClients", claims, expires: DateTime.Now.AddSeconds(60), signingCredentials: credentials);
+
+                    return context.Response.WriteAsync(tokenHandler.WriteToken(token));
                 });
 
                 endpoints.MapGet("/", async context =>
@@ -98,21 +104,5 @@ namespace Server
                 });
             });
         }
-
-        private string GenerateJwtToken(string name, string email)
-        {
-            if (string.IsNullOrEmpty(name))
-            {
-                throw new InvalidOperationException("Name is not specified.");
-            }
-
-            var claims = new[] { new Claim(ClaimTypes.Name, name), new Claim(ClaimTypes.Email, email) };
-            var credentials = new SigningCredentials(SecurityKey, SecurityAlgorithms.HmacSha256);
-            var token = new JwtSecurityToken("ExampleServer", "ExampleClients", claims, expires: DateTime.Now.AddSeconds(60), signingCredentials: credentials);
-            return JwtTokenHandler.WriteToken(token);
-        }
-
-        private readonly JwtSecurityTokenHandler JwtTokenHandler = new JwtSecurityTokenHandler();
-        private readonly SymmetricSecurityKey SecurityKey = new SymmetricSecurityKey(Guid.NewGuid().ToByteArray());
     }
 }

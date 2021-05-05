@@ -16,10 +16,9 @@ namespace Server.Services
     public class TodoService : Todo.TodoBase
     {
         private readonly IMediator _mediator;
-        public TodoService(IHttpContextAccessor contextAccessor)
+        public TodoService(IMediator mediator)
         {
-            var context = contextAccessor.HttpContext;
-            _mediator = context.RequestServices.GetService<IMediator>();
+            _mediator = mediator;
         }
         public override async Task<TodoLists> AllTodoLists(Empty request, ServerCallContext context)
         {

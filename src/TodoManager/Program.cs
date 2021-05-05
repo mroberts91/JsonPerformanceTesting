@@ -21,7 +21,7 @@ namespace TodoManager
 
         static async Task Main(string[] args)
         {
-            var channel = CreateAuthenticatedChannel($"https://{Address}");
+            using var channel = CreateAuthenticatedChannel($"https://{Address}");
             var greetClient = new Greeter.GreeterClient(channel);
             var todoClient = new Todo.TodoClient(channel);
             Console.WriteLine("Todo Manager");
